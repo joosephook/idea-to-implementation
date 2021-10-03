@@ -151,28 +151,11 @@ class Net(nn.Module):
         self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
 
     def localization(self, x):
-        """
-        torch.Size([64, 1, 28, 28])
-        torch.Size([64, 8, 22, 22])
-        torch.Size([64, 8, 11, 11])
-        torch.Size([64, 10, 7, 7])
-        torch.Size([64, 10, 3, 3])
-
-        :param x:
-        :return:
-        """
-        # print('localization')
-        # print(x.size())
         x = self.loc_conv1(x)
-        # print(x.size())
         x = self.loc_relu1(self.loc_maxpool1(x))
-        # print(x.size())
 
         x = self.loc_conv2(x)
-        # print(x.size())
         x = self.loc_relu2(self.loc_maxpool2(x))
-        # print(x.size())
-        # print()
         return x
 
     def stn(self, x):
@@ -249,28 +232,11 @@ class NetCoordConv(nn.Module):
         self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
 
     def localization(self, x):
-        """
-        torch.Size([64, 1, 28, 28])
-        torch.Size([64, 8, 22, 22])
-        torch.Size([64, 8, 11, 11])
-        torch.Size([64, 10, 7, 7])
-        torch.Size([64, 10, 3, 3])
-
-        :param x:
-        :return:
-        """
-        # print('localization')
-        # print(x.size())
         x = self.loc_conv1(x)
-        # print(x.size())
         x = self.loc_relu1(self.loc_maxpool1(x))
-        # print(x.size())
 
         x = self.loc_conv2(x)
-        # print(x.size())
         x = self.loc_relu2(self.loc_maxpool2(x))
-        # print(x.size())
-        # print()
         return x
 
     def stn(self, x):
@@ -338,27 +304,29 @@ def test(model, test_loader, device):
     #
     # A simple test procedure to measure the STN performances on MNIST.
     #
+    from sklearn.metrics import confusion_matrix
+
     with torch.no_grad():
         model.eval()
         test_loss = 0
         correct = 0
+        targets = []
+        preds = []
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
+            targets.append(target)
             output = model(data)
 
             # sum up batch loss
             test_loss += F.nll_loss(output, target, size_average=False).item()
             # get the index of the max log-probability
             pred = output.max(1, keepdim=True)[1]
+            preds.append(pred.view(-1))
+
             correct += pred.eq(target.view_as(pred)).sum().item()
-
+        cm = confusion_matrix(torch.cat(targets).cpu(), torch.cat(preds).cpu())
         test_loss /= len(test_loader.dataset)
-        # print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'
-        #       .format(test_loss, correct, len(test_loader.dataset),
-        #               100. * correct / len(test_loader.dataset)))
-        return test_loss
-
-
+        return test_loss, correct / len(test_loader.dataset), cm
 
 
 def convert_image_np(inp):
@@ -405,8 +373,16 @@ def visualize_stn(model, test_loader, device):
         axarr[1].imshow(out_grid)
         axarr[1].set_title('Transformed Images')
 
+def reproducible_ops() -> torch.device:
+    """
+    Tells PyTorch to use deterministic algorithms for certain
+    CUDA operations, where possible. Some non-deterministic operations
+    will throw a RunTimeError when we tell PyTorch to use deterministic
+    algorithms, so for these operations the determinism can be turned
+    off on a case-by-case basis.
 
-if __name__ == '__main__':
+    :return: the device used for training
+    """
     # Reproducibility
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if device.type == 'cuda':
@@ -415,8 +391,13 @@ if __name__ == '__main__':
         torch.use_deterministic_algorithms(True)
         # https://docs.nvidia.com/cuda/cublas/index.html#cublasApi_reproducibility
         import os
-
         os.environ['CUBLAS_WORKSPACE_CONFIG'] = ":4096:8"
+    return device
+
+
+
+if __name__ == '__main__':
+    device = reproducible_ops()
 
     opener = urllib.request.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0')]
@@ -438,44 +419,41 @@ if __name__ == '__main__':
             transforms.Normalize((0.1307,), (0.3081,))
         ])), batch_size=64, shuffle=True, num_workers=4)
 
-    # with    stn: final test set average loss 0.0395 w/ lr=0.01
-    # without stn: final test set average loss 0.0473 w/ lr=0.01
-    # model = Net(use_cuda=torch.cuda.is_available(), use_stn=True).to(device)
-    # model = Net(use_cuda=torch.cuda.is_available(), use_stn=False).to(device)
-    # model = Net(use_cuda=torch.cuda.is_available(), use_stn=True).to(device)
+    import json
 
-    losses = {
-        'with_stn': [],
-        'without_stn': []
-    }
     from itertools import product
 
     rows = []
-    for seed, use_stn, use_coordconv, use_r in product(range(50), [True, False], [True, False], [True, False]):
+    for seed, use_stn, use_coordconv, use_r in product(range(1), [True], [True, False], [True, False]):
         if not use_coordconv and use_r:
             # doesn't make sense
             continue
 
-        torch.random.manual_seed(2)
-        model =NetCoordConv(use_stn=use_stn, use_coordconv=use_coordconv, use_r=use_r).to(device)
+        # same neural network weights
+        torch.random.manual_seed(seed)
 
+        model = NetCoordConv(use_stn=use_stn, use_coordconv=use_coordconv, use_r=use_r).to(device)
         optimizer = optim.SGD(model.parameters(), lr=0.01)
-        test_losses = []
 
+        test_losses = []
+        n_corrects = []
+        cms = []
         for epoch in range(1, 50 + 1):
             train(model, optimizer, train_loader, device, epoch)
-            test_loss = test(model, test_loader, device)
+            test_loss, n_correct, cm = test(model, test_loader, device)
             test_losses.append(test_loss)
+            n_corrects.append(n_correct)
+            cms.append(json.dumps(cm.tolist()))
 
         rows.append(dict(
             seed=seed,
             use_stn=use_stn,
             use_coordconv=use_coordconv,
             use_r=use_r,
-            test_losses=test_losses
+            test_losses=test_losses,
+            n_corrects=n_corrects,
+            cms=cms
         ))
-        print(f'{use_stn=}\t{use_coordconv=}\t{use_r=}\tbest={np.min(test_losses):.4f}\t'+'\t'.join(f'{x:.4f}' for x in test_losses))
-
         # Visualize the STN transformation on some input batch
         # plt.ion()  # interactive mode
         # visualize_stn(model, test_loader, device)
@@ -483,4 +461,4 @@ if __name__ == '__main__':
         # plt.show()
     import pandas as pd
     df = pd.DataFrame.from_records(rows)
-    df.to_csv('results.csv')
+    df.to_csv('results-2.csv')

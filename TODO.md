@@ -3,10 +3,9 @@
    Networks (STN for short). You can read more about the spatial transformer networks in this
    DeepMind paper. STNs allows a neural network to perform spatial manipulation on the input data
    within the network to enhance the geometric invariance of the model.
-   * It can be a useful
-     mechanism because CNNs are not invariant to rotation and scale and more general affine
-     transformations. STNs can be simply inserted into existing convolutional architectures without
-     any extra training supervision or modification to the optimization process.
+   * It can be a useful mechanism because CNNs are not invariant to rotation and scale and
+     more general affine transformations. STNs can be simply inserted into existing convolutional
+     architectures without any extra training supervision or modification to the optimization process.
    * [This PyTorch tutorial might help you kick off this task. Please use this implementation as a baseline.](https://pytorch.org/tutorials/intermediate/spatial_transformer_tutorial.html)
 
 2. As the next step, let’s investigate if using `CoordConv` layers instead of standard `Conv` will help
@@ -14,8 +13,7 @@
    * `CoordConv` works by giving
      convolution operation access to its input coordinates through the use of extra coordinate
      channels. [You can read more about the `CoordConv` solution in this Uber AI paper.](https://arxiv.org/pdf/1807.03247v2.pdf)
-   * Compare the performance of the new model in your
-     preferred evaluation metrics
+   * Compare the performance of the new model in your preferred evaluation metrics
    * Motivate the choice of metrics.
 
 * STN is an emerging topic in the vision and learning communities.
@@ -35,4 +33,6 @@ cited.
 # Tasklist
 1. Reproducibility: torch implementation as reproducible as possible
 2. Implement CoordConv for torch based on `CoordConv.py`
-3. Think experiments
+3. Motivate loss metrics
+   * number of correct classifications seems reasonable if there is no reason to believe that misclassifying any one digit is more costly than others
+   * however, if certain numbers appear more often in yet-unseen real-life data, then it would be useful to know the confusion matrix of the network
