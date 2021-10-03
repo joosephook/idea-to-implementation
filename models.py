@@ -171,8 +171,10 @@ class NetCoordConv(nn.Module):
 
 
 class NetHomographic(nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self, iterations=1, **kwargs):
         super(NetHomographic, self).__init__()
+        self.iterations = iterations
+
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
 
@@ -203,7 +205,7 @@ class NetHomographic(nn.Module):
     def transformImage(self, image, p):
         # modified from: https://github.com/chenhsuanlin/inverse-compositional-STN/blob/master/MNIST-pytorch/warp.py
         batchSize, channels, H, W = image.size()
-        pMtrx = self.vec2mtrx(batchSize, p)
+        pMtrx = self.vec2mtrx(p)
 
         refMtrx = torch.eye(3).cuda()
         refMtrx = refMtrx.repeat(image.size(0), 1, 1)
@@ -223,7 +225,8 @@ class NetHomographic(nn.Module):
 
         return F.grid_sample(image, grid, align_corners=False)
 
-    def vec2mtrx(self, batchSize, p):
+    def vec2mtrx(self, p):
+        batchSize = p.size(0)
         # modified from: https://github.com/chenhsuanlin/inverse-compositional-STN/blob/master/MNIST-pytorch/warp.py
         # homographic transformation from vec2mtrx
         I = torch.ones(batchSize, dtype=torch.float32).cuda()
@@ -234,19 +237,41 @@ class NetHomographic(nn.Module):
                              torch.stack([p7, p8, I], dim=-1)], dim=1)
         return pMtrx
 
+    def predict_params(self, x):
+        x = self.localization(x)
+        return self.fc_loc(x.view(-1, 10 * 3 * 3))
 
-    def stn(self, x):
+    def stn(self, x, iterations=1):
         # Spatial transformer network forward function
-        xs = self.localization(x)
-        xs = xs.view(-1, 10 * 3 * 3)
-        theta = self.fc_loc(xs)
-        theta = theta.view(-1, 8)
+        p = self.predict_params(x)
 
-        return self.transformImage(x, theta)
+        for i in range(iterations):
+            image = self.transformImage(x, p)
+            dp = self.predict_params(image)
+            p = self.compose(p, dp)
+
+        return image
+
+    def compose(self, p, dp):
+        pMtrx = self.vec2mtrx(p)
+        dpMtrx = self.vec2mtrx(dp)
+        pMtrxNew = dpMtrx.matmul(pMtrx)
+        pMtrxNew = pMtrxNew / pMtrxNew[:, 2:3, 2:3]
+        pNew = self.mtrx2vec(pMtrxNew)
+        return pNew
+
+    # convert warp matrix to parameters
+    def mtrx2vec(self, pMtrx):
+        [row0, row1, row2] = torch.unbind(pMtrx, dim=1)
+        [e00, e01, e02] = torch.unbind(row0, dim=1)
+        [e10, e11, e12] = torch.unbind(row1, dim=1)
+        [e20, e21, e22] = torch.unbind(row2, dim=1)
+        p = torch.stack([e00 - 1, e01, e02, e10, e11 - 1, e12, e20, e21], dim=1)
+        return p
 
     def forward(self, x):
         # transform the input
-        x = self.stn(x)
+        x = self.stn(x, iterations=self.iterations)
 
         # Perform the usual forward pass
         x = F.relu(F.max_pool2d(self.conv1(x), 2))

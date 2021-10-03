@@ -3,21 +3,20 @@
 # Author: Ghassen Hamrouni
 # Modified for the Veriff Task by: Joosep Hook
 from __future__ import print_function
+
+from functools import partial
+from itertools import product
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
-from torchvision import datasets, transforms
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix
-import numpy as np
-
-import json
-
-from itertools import product
-from functools import partial
-import pandas as pd
 from six.moves import urllib
+from sklearn.metrics import confusion_matrix
+from torchvision import datasets, transforms
 
 from models import Net, NetCoordConv, NetHomographic
 
@@ -167,15 +166,16 @@ if __name__ == '__main__':
         ])), batch_size=64, shuffle=True, num_workers=4)
 
     model_list = [
-        ('CNN',       partial(Net, use_stn=False)),
-        ('Baseline',  partial(Net, use_stn=True)),
+        ('CNN', partial(Net, use_stn=False)),
+        ('Baseline', partial(Net, use_stn=True)),
         ('CoordConv', partial(NetCoordConv, use_stn=False)),
         ('CoordConvSTN', partial(NetCoordConv, use_stn=True)),
         ('NetHomographic', partial(NetHomographic, use_stn=True)),
+        ('NetHomographic4', partial(NetHomographic, use_stn=True, iterations=4)),
     ]
     rows = []
-    epochs = 1
-    lr=0.01
+    epochs = 20
+    lr = 0.01
     # lr scheduling
     gamma = 0.8
     step_size = 10
