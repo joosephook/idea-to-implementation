@@ -3,7 +3,6 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-# from spatial_transformer_tutorial import DEVICE
 
 
 class CoordConv(torch.nn.Module):

@@ -34,5 +34,9 @@ cited.
 1. Reproducibility: torch implementation as reproducible as possible
 2. Implement CoordConv for torch based on `CoordConv.py`
 3. Motivate loss metrics
-   * number of correct classifications seems reasonable if there is no reason to believe that misclassifying any one digit is more costly than others
-   * however, if certain numbers appear more often in yet-unseen real-life data, then it would be useful to know the confusion matrix of the network
+    * number of correct classifications seems reasonable if there is no reason to believe that misclassifying any one
+      digit is more costly than others
+    * however, if certain numbers appear more often in yet-unseen real-life data, then it would be useful to know the
+      confusion matrix of the network
+4. Implement inverse compositional stn
+   from https://github.com/chenhsuanlin/inverse-compositional-STN/blob/master/MNIST-pytorch/graph.py
