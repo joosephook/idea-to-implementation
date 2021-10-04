@@ -4,7 +4,6 @@ from torch import nn as nn
 from torch.nn import functional as F
 
 
-
 class CoordConv(torch.nn.Module):
     def __init__(self, with_r, x_dim, y_dim, in_channels, *args, **kwargs):
         super(CoordConv, self).__init__()
@@ -18,14 +17,16 @@ class CoordConv(torch.nn.Module):
         if self.with_r:
             in_channels += 1
             self.register_buffer('rs', torch.sqrt(torch.square(self.xs) + torch.square(self.ys)))
-            
+
         self.conv = torch.nn.Conv2d(in_channels, *args, **kwargs)
 
     def forward(self, x):
         if self.with_r:
-            augmented = torch.cat([x, self.xs.expand(x.size(0), -1, -1, -1), self.ys.expand(x.size(0), -1, -1, -1), self.rs.expand(x.size(0), -1, -1, -1) ], dim=1)
+            augmented = torch.cat([x, self.xs.expand(x.size(0), -1, -1, -1), self.ys.expand(x.size(0), -1, -1, -1),
+                                   self.rs.expand(x.size(0), -1, -1, -1)], dim=1)
         else:
-            augmented = torch.cat([x, self.xs.expand(x.size(0), -1, -1, -1), self.ys.expand(x.size(0), -1, -1, -1)], dim=1)
+            augmented = torch.cat([x, self.xs.expand(x.size(0), -1, -1, -1), self.ys.expand(x.size(0), -1, -1, -1)],
+                                  dim=1)
         return self.conv(augmented)
 
 
@@ -140,7 +141,6 @@ class NetCoordConv(nn.Module):
             # Initialize the weights/bias with identity transformation
             self.fc_loc[2].weight.data.zero_()
             self.fc_loc[2].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
-
 
     def stn(self, x):
         # Spatial transformer network forward function
